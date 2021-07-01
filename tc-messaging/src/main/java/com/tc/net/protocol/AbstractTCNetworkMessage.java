@@ -32,7 +32,7 @@ import com.tc.util.concurrent.SetOnceFlag;
  * 
  * @author teck
  */
-public class AbstractTCNetworkMessage implements TCNetworkMessage {
+public abstract class AbstractTCNetworkMessage implements TCNetworkMessage {
   protected static final Logger logger = LoggerFactory.getLogger(TCNetworkMessage.class);
   private static final int        MESSAGE_DUMP_MAXBYTES = 4 * 1024;
 

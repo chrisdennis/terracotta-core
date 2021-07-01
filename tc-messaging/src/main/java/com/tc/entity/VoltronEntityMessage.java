@@ -124,4 +124,12 @@ public interface VoltronEntityMessage {
    * @return The EntityMessage instance or null, if there isn't one.
    */
   public EntityMessage getEntityMessage();
+
+  default boolean cancel() {
+    return false;
+  }
+
+  default boolean isCancelled() {
+    return false;
+  }
 }

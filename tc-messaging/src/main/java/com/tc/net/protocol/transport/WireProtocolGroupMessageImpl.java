@@ -64,14 +64,20 @@ public class WireProtocolGroupMessageImpl extends AbstractTCNetworkMessage imple
 
   public static WireProtocolGroupMessageImpl wrapMessages(ArrayList<TCNetworkMessage> msgPayloads,
                                                           TCConnection source) {
+    int totalByteBuffers = 0;
+    for (Iterator<TCNetworkMessage> it = msgPayloads.iterator(); it.hasNext(); ) {
+      TCNetworkMessage message = it.next();
+      if (message.commit()) {
+        totalByteBuffers += message.getEntireMessageData().length;
+      } else {
+        it.remove();
+      }
+    }
+
     WireProtocolHeader header = new WireProtocolHeader();
     header.setProtocol(WireProtocolHeader.PROTOCOL_MSGGROUP);
     header.setMessageCount(msgPayloads.size());
 
-    int totalByteBuffers = 0;
-    for (int i = 0; i < msgPayloads.size(); i++) {
-      totalByteBuffers += msgPayloads.get(i).getEntireMessageData().length;
-    }
 
     TCByteBuffer[] msgs = new TCByteBuffer[msgPayloads.size() + totalByteBuffers];
     int i = 0;
@@ -175,6 +181,16 @@ public class WireProtocolGroupMessageImpl extends AbstractTCNetworkMessage imple
   @Override
   public TCConnection getSource() {
     return this.sourceConnection;
+  }
+
+  @Override
+  public boolean cancel() {
+    return false;
+  }
+
+  @Override
+  public boolean commit() {
+    return true;
   }
 
   @Override

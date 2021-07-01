@@ -49,4 +49,8 @@ public interface TCNetworkMessage extends Recyclable {
   public void setSentCallback(Runnable callback);
   
   public Runnable getSentCallback();
+
+  boolean cancel();
+
+  boolean commit();
 }

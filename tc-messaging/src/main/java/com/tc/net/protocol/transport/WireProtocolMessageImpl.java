@@ -90,6 +90,26 @@ public class WireProtocolMessageImpl extends AbstractTCNetworkMessage implements
     return sourceConnection;
   }
 
+  @Override
+  public boolean cancel() {
+    TCNetworkMessage payload = getMessagePayload();
+    if (payload == null) {
+      return false;
+    } else {
+      return payload.cancel();
+    }
+  }
+
+  @Override
+  public boolean commit() {
+    TCNetworkMessage payload = getMessagePayload();
+    if (payload == null) {
+      return true;
+    } else {
+      return payload.commit();
+    }
+  }
+
   protected void recordLength() {
     TCNetworkMessage msgPayload = getMessagePayload();
     // if the payload is null, then we need to record our own length as the packet length. Otherwise, we need to add the

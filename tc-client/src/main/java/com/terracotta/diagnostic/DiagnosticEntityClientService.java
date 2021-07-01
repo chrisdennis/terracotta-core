@@ -25,6 +25,8 @@ import java.net.ConnectException;
 import java.nio.charset.Charset;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.terracotta.connection.DiagnosticsConfig;
@@ -32,10 +34,8 @@ import org.terracotta.entity.EntityClientEndpoint;
 import org.terracotta.entity.EntityClientService;
 import org.terracotta.entity.EntityMessage;
 import org.terracotta.entity.EntityResponse;
-import org.terracotta.entity.InvokeFuture;
 import org.terracotta.entity.MessageCodec;
 import org.terracotta.entity.MessageCodecException;
-import org.terracotta.exception.EntityException;
 
 
 public class DiagnosticEntityClientService implements EntityClientService<Diagnostics, Object, EntityMessage, EntityResponse, Object>{
@@ -70,7 +70,7 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
           if (methodName.equals("close")) {
             closeHook.run();
           } else {
-            InvokeFuture returnValue = ece.beginInvoke().message(new EntityMessage() {
+            Future returnValue = ece.beginInvoke().message(new EntityMessage() {
               @Override
               public String toString() {
                 if (methodName.equals("get")) {
@@ -97,13 +97,13 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
             // if the server is terminating, never going to get a message back.  just return null
             if (!methodName.equals("terminateServer") && !methodName.equals("forceTerminateServer") && !methodName.equals("restartServer")) {
               try {
-                return returnValue.getWithTimeout(timeoutInMillis, TimeUnit.MILLISECONDS).toString();
+                return returnValue.get(timeoutInMillis, TimeUnit.MILLISECONDS).toString();
               } catch (TimeoutException timeout) {
                 return timeoutMessage;
               }
             }
           }
-        } catch (EntityException ee) {
+        } catch (ExecutionException ee) {
           RuntimeException t = ThreadUtil.getRootCause(ee, RuntimeException.class);
           if (t != null) {
             throw t;

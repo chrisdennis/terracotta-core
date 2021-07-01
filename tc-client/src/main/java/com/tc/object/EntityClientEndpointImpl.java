@@ -24,7 +24,6 @@ import org.terracotta.entity.EndpointDelegate;
 import org.terracotta.entity.EntityClientEndpoint;
 import org.terracotta.entity.InvocationBuilder;
 import org.terracotta.entity.InvocationCallback;
-import org.terracotta.entity.InvokeFuture;
 import org.terracotta.entity.MessageCodec;
 import org.terracotta.entity.EntityMessage;
 import org.terracotta.entity.EntityResponse;
@@ -35,10 +34,12 @@ import com.tc.text.MapListPrettyPrint;
 import com.tc.util.Assert;
 import org.terracotta.exception.EntityException;
 
+import java.sql.Time;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -301,38 +302,43 @@ public class EntityClientEndpointImpl<M extends EntityMessage, R extends EntityR
       return this;
     }
     
-    private InvokeFuture<R> returnTypedInvoke(long startTime, final InFlightMessage result) {
-      return new InvokeFuture<R>() {
+    private Future<R> returnTypedInvoke(long startTime, final InFlightMessage result) {
+      return new Future<R>() {
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+          return result.cancel();
+        }
+
+        @Override
+        public boolean isCancelled() {
+          return result.isCancelled();
+        }
+
         @Override
         public boolean isDone() {
           return result.isDone();
         }
 
         @Override
-        public R get() throws InterruptedException, EntityException {
+        public R get() throws InterruptedException, ExecutionException {
           try {
             return codec.decodeResponse(result.get());
-          } catch (MessageCodecException e) {
-            throw new RuntimeException(e);
+          } catch (MessageCodecException | EntityException e) {
+            throw new ExecutionException(e);
           } finally {
             collectStats(startTime, result);
           }
         }
 
         @Override
-        public R getWithTimeout(long timeout, TimeUnit unit) throws InterruptedException, EntityException, TimeoutException {
+        public R get(long timeout, TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
           try {
             return codec.decodeResponse(result.getWithTimeout(timeout, unit));
-          } catch (MessageCodecException e) {
-            throw new RuntimeException(e);
+          } catch (MessageCodecException | EntityException e) {
+            throw new ExecutionException(e);
           } finally {
             collectStats(startTime, result);
           }
-        }
-
-        @Override
-        public void interrupt() {
-          result.interrupt();
         }
 
         @Override
@@ -343,7 +349,7 @@ public class EntityClientEndpointImpl<M extends EntityMessage, R extends EntityR
     }
     
     @Override
-    public synchronized InvokeFuture<R> invokeWithTimeout(long time, TimeUnit units) throws MessageCodecException, InterruptedException, TimeoutException {
+    public synchronized Future<R> invokeWithTimeout(long time, TimeUnit units) throws MessageCodecException, InterruptedException, TimeoutException {
       checkInvoked();
       invoked = true;
       InFlightMonitor<R> ifm = (this.monitor != null) ? new InFlightMonitor<>(codec, this.monitor, executor) : null;
@@ -360,7 +366,7 @@ public class EntityClientEndpointImpl<M extends EntityMessage, R extends EntityR
     }
 
     @Override
-    public synchronized InvokeFuture<R> invoke() throws MessageCodecException {
+    public synchronized Future<R> invoke() throws MessageCodecException {
       checkInvoked();
       invoked = true;
       InFlightMonitor<R> ifm = (this.monitor != null) ? new InFlightMonitor<>(codec, this.monitor, executor) : null;

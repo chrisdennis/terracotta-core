@@ -62,6 +62,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import com.tc.net.protocol.TCProtocolAdaptor;
 
+import static com.tc.net.protocol.transport.WireProtocolMessageImpl.wrapMessage;
+
 /**
  * The {@link TCConnection} implementation. SocketChannel read/write happens here.
  *
@@ -503,40 +505,44 @@ final class TCConnectionImpl implements TCConnection, TCChannelReader, TCChannel
       WriteContext context = this.writeContexts.get(0);
       final TCByteBuffer[] buffers = context.entireMessageData;
 
-      long bytesWritten = 0;
-      // Do the write in a loop, instead of calling write(ByteBuffer[]).
-      // This seems to avoid memory leaks and faster
-      for (int i = context.index, nn = buffers.length; i < nn; i++) {
-        final int written = bufferManager.forwardToWriteBuffer(buffers[i].getNioBuffer());
-        if (written == 0) {
-          break;
+      if (context.commit()) {
+        long bytesWritten = 0;
+        // Do the write in a loop, instead of calling write(ByteBuffer[]).
+        // This seems to avoid memory leaks and faster
+        for (int i = context.index, nn = buffers.length; i < nn; i++) {
+          final int written = bufferManager.forwardToWriteBuffer(buffers[i].getNioBuffer());
+          if (written == 0) {
+            break;
+          }
+
+          bytesWritten += written;
+
+          if (buffers[i].hasRemaining()) {
+            break;
+          } else {
+            context.incrementIndexAndCleanOld();
+          }
         }
 
-        bytesWritten += written;
+        if (debug) {
+          logger.debug("Wrote " + bytesWritten + " bytes on connection " + this.channel.toString());
+        }
+        totalBytesWritten += bytesWritten;
 
-        if (buffers[i].hasRemaining()) {
-          break;
+        if (context.done()) {
+          if (debug) {
+            logger.debug("Complete message sent on connection " + this.channel.toString());
+          }
+          context.writeComplete();
+          this.writeContexts.remove(context);
         } else {
-          context.incrementIndexAndCleanOld();
+          if (debug) {
+            logger.debug("Message not yet completely sent on connection " + this.channel.toString());
+          }
+          break;
         }
-      }
-
-      if (debug) {
-        logger.debug("Wrote " + bytesWritten + " bytes on connection " + this.channel.toString());
-      }
-      totalBytesWritten += bytesWritten;
-
-      if (context.done()) {
-        if (debug) {
-          logger.debug("Complete message sent on connection " + this.channel.toString());
-        }
-        context.writeComplete();
-        this.writeContexts.remove(context);
       } else {
-        if (debug) {
-          logger.debug("Message not yet completely sent on connection " + this.channel.toString());
-        }
-        break;
+        writeContexts.remove(context);
       }
     }
 
@@ -894,7 +900,7 @@ final class TCConnectionImpl implements TCConnection, TCChannelReader, TCChannel
     Assert.eval(!(message instanceof WireProtocolMessage));
     final TCNetworkMessage payload = message;
 
-    WireProtocolMessage wireMessage = WireProtocolMessageImpl.wrapMessage(message, this);
+    WireProtocolMessage wireMessage = wrapMessage(message, this);
     Assert.eval(wireMessage.getSentCallback() == null);
 
     final Runnable callback = payload.getSentCallback();
@@ -977,6 +983,10 @@ final class TCConnectionImpl implements TCConnection, TCChannelReader, TCChannel
         this.entireMessageData = getClonedMessage(message.getEntireMessageData());
       }
 
+    }
+
+    public boolean commit() {
+      return message.commit();
     }
 
     boolean done() {

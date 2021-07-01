@@ -18,6 +18,7 @@
  */
 package com.tc.object;
 
+import com.tc.entity.NetworkVoltronEntityMessage;
 import org.terracotta.exception.EntityException;
 
 import com.tc.tracing.Trace;
@@ -407,5 +408,20 @@ public class InFlightMessage implements PrettyPrintable {
   
   void addServerStatistics(long[] stats) {
     this.serverStats = stats;
+  }
+
+  public boolean cancel() {
+    if (message.cancel()) {
+      if (monitor != null) {
+        monitor.close();
+      }
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  public boolean isCancelled() {
+    return message.isCancelled();
   }
 }

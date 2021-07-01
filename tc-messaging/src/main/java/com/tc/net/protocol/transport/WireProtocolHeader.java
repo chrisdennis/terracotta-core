@@ -21,7 +21,6 @@ package com.tc.net.protocol.transport;
 import com.tc.bytes.TCByteBuffer;
 import com.tc.net.protocol.AbstractTCNetworkHeader;
 import com.tc.net.protocol.TCNetworkMessage;
-import com.tc.net.protocol.delivery.OOOProtocolMessage;
 import com.tc.net.protocol.tcm.TCMessage;
 import com.tc.util.Assert;
 import com.tc.util.Conversion;
@@ -68,14 +67,13 @@ public class WireProtocolHeader extends AbstractTCNetworkHeader implements Clone
   public static final short    PROTOCOL_UNKNOWN             = 0;
   public static final short    PROTOCOL_TCM                 = 1;
   public static final short    PROTOCOL_TRANSPORT_HANDSHAKE = 2;
-  public static final short    PROTOCOL_OOOP                = 3;
   public static final short    PROTOCOL_HEALTHCHECK_PROBES  = 4;
   public static final short    PROTOCOL_MSGGROUP            = 5;
 
   private static final int     MAGIC_NUM                    = 0xAAAAAAAA;
 
   private static final short[] VALID_PROTOCOLS              = new short[] { PROTOCOL_TCM, PROTOCOL_TRANSPORT_HANDSHAKE,
-      PROTOCOL_OOOP, PROTOCOL_HEALTHCHECK_PROBES, PROTOCOL_MSGGROUP };
+      PROTOCOL_HEALTHCHECK_PROBES, PROTOCOL_MSGGROUP };
 
   // 15 32-bit words max
   static final short           MAX_LENGTH                   = 15 * 4;
@@ -87,9 +85,9 @@ public class WireProtocolHeader extends AbstractTCNetworkHeader implements Clone
     // TODO: is there a better way to do this (ie. not using instanceof)?
     if (msg instanceof TCMessage) {
       return PROTOCOL_TCM;
-    } else if (msg instanceof OOOProtocolMessage) { return PROTOCOL_OOOP; }
-
-    return PROTOCOL_UNKNOWN;
+    } else {
+      return PROTOCOL_UNKNOWN;
+    }
   }
 
   public WireProtocolHeader() {
@@ -351,9 +349,6 @@ public class WireProtocolHeader extends AbstractTCNetworkHeader implements Clone
     switch (protocol) {
       case PROTOCOL_TCM: {
         return "TCM";
-      }
-      case PROTOCOL_OOOP: {
-        return "OOOP";
       }
       case PROTOCOL_HEALTHCHECK_PROBES: {
         return "HEALTHCHECK_PROBES";

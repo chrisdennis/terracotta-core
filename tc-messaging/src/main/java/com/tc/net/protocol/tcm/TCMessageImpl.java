@@ -33,6 +33,7 @@ import com.tc.util.Assert;
 import com.tc.util.concurrent.SetOnceFlag;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author teck
@@ -43,6 +44,7 @@ public abstract class TCMessageImpl extends AbstractTCNetworkMessage implements 
   private final MessageMonitor          monitor;
   private final SetOnceFlag             processed         = new SetOnceFlag();
   private final SetOnceFlag             isSent            = new SetOnceFlag();
+  private final AtomicReference<MessageState> state = new AtomicReference<>(MessageState.PENDING);
   private final TCMessageType           type;
   private final MessageChannel          channel;
   private final boolean                 isOutgoing;
@@ -405,4 +407,31 @@ public abstract class TCMessageImpl extends AbstractTCNetworkMessage implements 
     return isOutgoing ? channel.getRemoteNodeID() : channel.getLocalNodeID();
   }
 
+  @Override
+  public boolean cancel() {
+    if (state.compareAndSet(MessageState.PENDING, MessageState.CANCELLED)) {
+      return true;
+    } else {
+      return MessageState.CANCELLED.equals(state.get());
+    }
+  }
+
+  public boolean isCancelled() {
+    return MessageState.CANCELLED.equals(state.get());
+  }
+
+  @Override
+  public boolean commit() {
+    if (state.compareAndSet(MessageState.PENDING, MessageState.COMMITTED)) {
+      return true;
+    } else {
+      return MessageState.COMMITTED.equals(state.get());
+    }
+  }
+
+  enum MessageState {
+    PENDING,
+    COMMITTED,
+    CANCELLED;
+  }
 }

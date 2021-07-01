@@ -84,7 +84,6 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
 
   private final ClientMessageChannel channel;
   private final ConcurrentMap<TransactionID, InFlightMessage> inFlightMessages;
-  private final StoppableSemaphore requestTickets = new StoppableSemaphore(ClientConfigurationContext.MAX_PENDING_REQUESTS);
   private final TransactionSource transactionSource;
 
   private final ClientEntityStateManager stateManager;
@@ -137,14 +136,11 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
   }
 
   private boolean enqueueMessage(InFlightMessage msg) throws RejectedExecutionException {
-    if (!this.stateManager.isRunning()) {
-      return false;
-    }
-    if (requestTickets.tryAcquire()) {
+    if (this.isRunning()) {
       inFlightMessages.put(msg.getTransactionID(), msg);
       return true;
     } else {
-      throw new RejectedExecutionException("Output queue is full");
+      return false;
     }
   }
 
@@ -164,20 +160,12 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
 
       // stop drains the permits so even if asked to not waitUntilRunning, stop is still checked
 
-      while (!isShutdown()) {
-        try {
-          if (timeout == 0) {
-            requestTickets.acquire();
-          } else if (!requestTickets.tryAcquire(end - System.nanoTime(), TimeUnit.NANOSECONDS)) {
-            throw new TimeoutException();
-          }
-          inFlightMessages.put(msg.getTransactionID(), msg);
-          return true;
-        } catch (InterruptedException e) {
-          interrupted = true;
-        }
+      if (isShutdown()) {
+        return false;
+      } else {
+        inFlightMessages.put(msg.getTransactionID(), msg);
+        return true;
       }
-      return false;
     } finally {
       if (interrupted) {
         Thread.currentThread().interrupt();
@@ -342,7 +330,7 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
     InFlightMessage inFlight = new InFlightMessage(eid, message, requestedAcks, monitor, false, true);
     try {
       msgCount.increment();
-      inflights.add(ClientConfigurationContext.MAX_PENDING_REQUESTS - requestTickets.availablePermits());
+      inflights.add(inFlightMessages.size());
       queued = enqueueMessage(inFlight);
     } catch (Throwable t) {
       transactionSource.retire(inFlight.getTransactionID());
@@ -383,7 +371,7 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
     if (stateManager.isShutdown()) {
       sub.put("pendingMessages", "<shutdown>");
     } else {
-      sub.put("pendingMessages", ClientConfigurationContext.MAX_PENDING_REQUESTS - this.requestTickets.availablePermits());
+      sub.put("pendingMessages", inFlightMessages.size());
     }
     map.put("channel", sub);
     if (stats instanceof PrettyPrintable) {
@@ -438,12 +426,24 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
       InFlightMessage inFlight = inFlightMessages.remove(id);
       if (inFlight != null) {
         inFlight.retired();
-        requestTickets.release();
       } else {
         // resend result or stop
       }
     } finally {
       transactionSource.retire(id);
+    }
+  }
+
+  public boolean cancel(TransactionID id) {
+    InFlightMessage inFlight = inFlightMessages.get(id);
+    if (inFlight == null) {
+      return false;
+    } else if (inFlight.cancel()) {
+      inFlightMessages.remove(id, inFlight);
+      transactionSource.retire(id);
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -494,7 +494,6 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
         return;
       } else {
         // not sending anymore, drain the permits
-        requestTickets.stop();
         stateManager.stop();
         notifyAll();
       }
@@ -647,7 +646,7 @@ public class ClientEntityManagerImpl implements ClientEntityManager {
     InFlightMessage inFlight = new InFlightMessage(eid, message, requestedAcks, monitor, shouldBlockGetOnRetire, asyncMode);
     try {
       msgCount.increment();
-      inflights.add(ClientConfigurationContext.MAX_PENDING_REQUESTS - requestTickets.availablePermits());
+      inflights.add(inFlightMessages.size());
       // NOTE:  If we are already stop, the handler in outbound will fail this message for us.
       queued = enqueueMessage(inFlight, timeout, units, inFlight.getMessage().getVoltronType() != VoltronEntityMessage.Type.INVOKE_ACTION);
     } catch (Throwable t) {
