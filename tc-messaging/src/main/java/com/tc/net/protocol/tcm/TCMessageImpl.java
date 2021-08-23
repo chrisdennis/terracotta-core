@@ -410,6 +410,7 @@ public abstract class TCMessageImpl extends AbstractTCNetworkMessage implements 
   @Override
   public boolean cancel() {
     if (state.compareAndSet(MessageState.PENDING, MessageState.CANCELLED)) {
+      LOGGER.warn("Cancelled delivery of message: " + this);
       return true;
     } else {
       return MessageState.CANCELLED.equals(state.get());
@@ -425,7 +426,11 @@ public abstract class TCMessageImpl extends AbstractTCNetworkMessage implements 
     if (state.compareAndSet(MessageState.PENDING, MessageState.COMMITTED)) {
       return true;
     } else {
-      return MessageState.COMMITTED.equals(state.get());
+      boolean committed = MessageState.COMMITTED.equals(state.get());
+      if (!committed) {
+        LOGGER.warn("Commit vetoed of message: " + this);
+      }
+      return committed;
     }
   }
 

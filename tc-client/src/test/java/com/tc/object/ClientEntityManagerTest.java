@@ -400,7 +400,7 @@ public class ClientEntityManagerTest extends TestCase {
     });
     EntityClientEndpoint endpoint = this.manager.fetchEntity(entityID, 1L, instance, new ByteArrayMessageCodec(), mock(Runnable.class));
 
-    Future future = endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke();
+    Future future = endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invokeAsFuture();
     ByteArrayEntityResponse response = (ByteArrayEntityResponse) future.get(5, TimeUnit.SECONDS);
     assertThat(Arrays.deepEquals(new Object[]{response.getResponse()}, new Object[]{resultObject}), is(true));
   }
@@ -424,7 +424,7 @@ public class ClientEntityManagerTest extends TestCase {
     EntityClientEndpoint endpoint = this.manager.fetchEntity(entityID, 1L, instance, new ByteArrayMessageCodec(), mock(Runnable.class));
 
     try {
-      endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke().get(10, TimeUnit.SECONDS);
+      endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invokeAsFuture().get(10, TimeUnit.SECONDS);
       fail("expected EntityException");
     } catch (ExecutionException e) {
       assertThat(e.getCause(), is(instanceOf(EntityException.class)));
@@ -446,7 +446,7 @@ public class ClientEntityManagerTest extends TestCase {
     EntityClientEndpoint endpoint = this.manager.fetchEntity(entityID, 1L, instance, new ByteArrayMessageCodec(), mock(Runnable.class));
 
     AuditingInvocationCallback callback = new AuditingInvocationCallback();
-    endpoint.beginAsyncInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke(callback);
+    endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke(callback);
 
     int i = 0;
     assertThat(callback.events.get(i++), is(Acks.SENT));
@@ -476,7 +476,7 @@ public class ClientEntityManagerTest extends TestCase {
     EntityClientEndpoint endpoint = this.manager.fetchEntity(entityID, 1L, instance, new ByteArrayMessageCodec(), mock(Runnable.class));
 
     AuditingInvocationCallback callback = new AuditingInvocationCallback();
-    endpoint.beginAsyncInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke(callback);
+    endpoint.beginInvoke().message(new ByteArrayEntityMessage(messageObject)).invoke(callback);
 
     int i = 0;
     assertThat(callback.events.get(i++), is(Acks.SENT));
@@ -493,57 +493,6 @@ public class ClientEntityManagerTest extends TestCase {
     assertThat(callback.events.size(), is(4));
   }
 
-  public void testInvokeWithTimeoutZeroWaitsForever() throws Exception {
-    // Set the target for success.
-    final byte[] resultObject = new byte[8];
-    ByteBuffer.wrap(resultObject).putLong(1L);
-    final EntityException resultException = null;
-    when(channel.createMessage(Mockito.eq(TCMessageType.VOLTRON_ENTITY_MESSAGE))).then(new Answer<TCMessage>() {
-      @Override
-      public TCMessage answer(InvocationOnMock invocation) throws Throwable {
-        return new TestRequestBatchMessage(manager, resultObject, resultException, true);
-      }
-    });       
-    TestFetcher fetcher = new TestFetcher(this.manager, this.entityID, 1L, this.instance);
-    fetcher.start();
-    fetcher.join();
-    List<TestRequestBatchMessage> full = new ArrayList<>();
-    when(channel.createMessage(Mockito.eq(TCMessageType.VOLTRON_ENTITY_MESSAGE))).then(new Answer<TCMessage>() {
-      @Override
-      public TCMessage answer(InvocationOnMock invocation) throws Throwable {
-        TestRequestBatchMessage msg = new TestRequestBatchMessage(manager, resultObject, resultException, false);
-        full.add(msg);
-        return msg;
-      }
-    }); 
-    Thread t = Thread.currentThread();
-    new Thread(()->{
-     try {
-       TimeUnit.SECONDS.sleep(1);
-     } catch (InterruptedException ie) {
-       
-     }
-     full.stream().forEach(m->{
-        manager.complete(m.getTransactionID(), new byte[0]);
-        manager.retired(m.getTransactionID());
-       });
-    }).start();
-    
-    try {
-      EntityClientEndpoint endpoint = fetcher.getResult();
-      for (int x=0;x<ClientConfigurationContext.MAX_PENDING_REQUESTS;x++) {
-        endpoint.beginInvoke().invokeWithTimeout(5, TimeUnit.SECONDS);
-      }
-      endpoint.beginInvoke().invokeWithTimeout(0, TimeUnit.SECONDS);
-    } catch (TimeoutException to) {
-      to.printStackTrace();
-    } catch (Exception e) {
-      e.printStackTrace();
-      // not expected
-      throw e;
-    } 
-  }
-    
   public void testThreadInterruptsDontCauseSendIssues() throws Exception {
     // Set the target for success.
     final byte[] resultObject = new byte[8];

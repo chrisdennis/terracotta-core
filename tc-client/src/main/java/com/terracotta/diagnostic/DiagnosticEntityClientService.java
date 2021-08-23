@@ -21,7 +21,6 @@ package com.terracotta.diagnostic;
 import com.tc.util.concurrent.ThreadUtil;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.net.ConnectException;
 import java.nio.charset.Charset;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +33,7 @@ import org.terracotta.entity.EntityClientEndpoint;
 import org.terracotta.entity.EntityClientService;
 import org.terracotta.entity.EntityMessage;
 import org.terracotta.entity.EntityResponse;
+import org.terracotta.entity.InvocationCallback;
 import org.terracotta.entity.MessageCodec;
 import org.terracotta.entity.MessageCodecException;
 
@@ -64,7 +64,7 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
     return (Diagnostics)Proxy.newProxyInstance(getClass().getClassLoader(), new Class[] {Diagnostics.class},
             new java.lang.reflect.InvocationHandler() {
       @Override
-      public Object invoke(Object proxy, Method method, final Object[] args) throws Throwable {
+      public Object invoke(Object proxy, Method method, final Object[] args) {
         try {
           final String methodName = method.getName();
           if (methodName.equals("close")) {
@@ -93,7 +93,7 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
                   return cmd.toString();
                 }
               }
-            }).invoke();
+            }).invokeAsFuture();
             // if the server is terminating, never going to get a message back.  just return null
             if (!methodName.equals("terminateServer") && !methodName.equals("forceTerminateServer") && !methodName.equals("restartServer")) {
               try {
@@ -110,8 +110,6 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
           }
         } catch (InterruptedException ie) {
           return "ERROR:interrupted";
-        } catch (MessageCodecException code) {
-          return "ERROR:" + code.getClass() + ":" + code.getMessage();
         }
         return null;
       }}
@@ -156,12 +154,12 @@ public class DiagnosticEntityClientService implements EntityClientService<Diagno
       }
 
       @Override
-      public byte[] encodeResponse(EntityResponse r) throws MessageCodecException {
+      public byte[] encodeResponse(EntityResponse r) {
         return r.toString().getBytes(charset);
       }
 
       @Override
-      public EntityResponse decodeResponse(final byte[] bytes) throws MessageCodecException {
+      public EntityResponse decodeResponse(final byte[] bytes) {
         return new EntityResponse() {
           @Override
           public String toString() {

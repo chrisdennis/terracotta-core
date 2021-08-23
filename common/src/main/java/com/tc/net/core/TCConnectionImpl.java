@@ -18,6 +18,7 @@
  */
 package com.tc.net.core;
 
+import com.tc.net.protocol.tcm.TCMessageImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,6 +72,7 @@ import static com.tc.net.protocol.transport.WireProtocolMessageImpl.wrapMessage;
  * @author mgovinda
  */
 final class TCConnectionImpl implements TCConnection, TCChannelReader, TCChannelWriter {
+  private static final Logger LOGGER = LoggerFactory.getLogger(TCConnectionImpl.class);
 
   private static final long                     NO_CONNECT_TIME             = -1L;
   private static final Logger logger = LoggerFactory.getLogger(TCConnection.class);
@@ -542,6 +544,7 @@ final class TCConnectionImpl implements TCConnection, TCChannelReader, TCChannel
           break;
         }
       } else {
+        LOGGER.warn("Not sending uncommitted message: " + context);
         writeContexts.remove(context);
       }
     }

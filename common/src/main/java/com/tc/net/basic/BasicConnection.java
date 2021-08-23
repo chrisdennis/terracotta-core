@@ -96,7 +96,8 @@ public class BasicConnection implements TCConnection {
     this.write = (message)->{
       synchronized (writeMutex) {
         try {
-          if (this.src != null) {
+          if (this.src != null && message.commit()) {
+            Thread.dumpStack();
             boolean interrupted = Thread.interrupted();
             int totalLen = message.getTotalLength();
             int moved = 0;

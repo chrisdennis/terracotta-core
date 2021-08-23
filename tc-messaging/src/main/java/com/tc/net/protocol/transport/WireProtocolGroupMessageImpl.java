@@ -53,12 +53,16 @@ import com.tc.net.core.TCConnection;
 import com.tc.net.protocol.AbstractTCNetworkMessage;
 import com.tc.net.protocol.TCNetworkHeader;
 import com.tc.net.protocol.TCNetworkMessage;
+import com.tc.net.protocol.tcm.TCMessageImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 
 public class WireProtocolGroupMessageImpl extends AbstractTCNetworkMessage implements WireProtocolGroupMessage {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(WireProtocolGroupMessageImpl.class);
   private final TCConnection                sourceConnection;
   private final ArrayList<TCNetworkMessage> messagePayloads;
 
@@ -70,6 +74,7 @@ public class WireProtocolGroupMessageImpl extends AbstractTCNetworkMessage imple
       if (message.commit()) {
         totalByteBuffers += message.getEntireMessageData().length;
       } else {
+        LOGGER.warn("Removing message from group: " + message);
         it.remove();
       }
     }
